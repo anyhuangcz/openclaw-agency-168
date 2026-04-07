@@ -1,0 +1,67 @@
+name: CODE-REVIEWER Security Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  sensitive-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for sensitive patterns
+        id: scan
+        run: |
+          declare -a SENSITIVE_PATTERNS=(
+            "\.env\b"
+            "api[_-]?key\s*[:=]"
+            "password\s*[:=]\s*['\"]?"
+            "secret\s*[:=]\s*['\"]?"
+            "token\s*[:=]\s*['\"]?"
+            "ghp_[A-Za-z0-9]{36}"
+            "openai[_-]?key\s*[:=]"
+            "minimax[_-]?key\s*[:=]"
+            "MEMORY\.md\b"
+            "USER\.md\b"
+            "SOUL\.md\b"
+            "IDENTITY\.md\b"
+            "TOOLS\.md\b"
+            "AGENTS\.md\b"
+            "BOOTSTRAP\.md\b"
+            "HEARTBEAT\.md\b"
+            "me_scraper"
+            "b2b_bathroom_seed\.sql"
+            "\.sqlite3"
+            "Yi@345liu"
+            "43\.161\.230\.150"
+            "爬虫"
+            "sshpass"
+            "bot_token"
+          )
+          
+          VIOLATIONS=0
+          for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+            MATCHED=$(grep -r -l -E "$pattern" --include="*.md" --include="*.js" --include="*.py" --include="*.json" --include="*.yml" --include="*.yaml" --include="*.sh" --include="*.sql" . 2>/dev/null || true)
+            if [ -n "$MATCHED" ]; then
+              echo "::error::Pattern '$pattern' found in: $MATCHED"
+              VIOLATIONS=$((VIOLATIONS+1))
+            fi
+          done
+          
+          echo "Total violations: $VIOLATIONS"
+          echo "violations=$VIOLATIONS" >> $GITHUB_OUTPUT
+          
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo "::error::CODE-REVIEWER: $VIOLATIONS sensitive pattern(s) detected"
+            exit 1
+          fi
+          echo "✅ CODE-REVIEWER: All clear - no sensitive patterns found"
+
+      - name: List scanned files
+        run: |
+          echo "Files scanned:"
+          find . -type f \( -name "*.md" -o -name "*.js" -o -name "*.py" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" -o -name "*.sql" \) | wc -l
+          echo "Agent directories:"
+          find . -maxdepth 2 -type d -name "*-*" | head -20
